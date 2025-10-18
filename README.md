@@ -1,0 +1,99 @@
+# Sinteticos
+
+A small Python toolkit to generate synthetic tabular data from a sample dataset, inspired by the provided Jupyter notebook. It wraps SDV models (CTGAN, GaussianCopula, CopulaGAN) into a simple library API and a command-line interface.
+
+## Features
+- Load CSV/Excel datasets
+- Optional preprocessing (drop NA, coerce selected columns to numeric)
+- Train SDV models: CTGAN, GaussianCopula, CopulaGAN
+- Generate synthetic samples
+- Evaluate distribution similarity using Hellinger distance per column
+- Optional plots: Hellinger bar chart and histogram comparisons
+- CLI script for end-to-end generation
+
+## Installation
+Install dependencies (Python 3.9+ recommended):
+
+```
+pip install pandas numpy matplotlib seaborn sdv openpyxl
+```
+
+Note: `sdv` may require additional system packages depending on your environment.
+
+## Quick Start (Python)
+```
+from sinteticos import (
+    load_dataframe, save_dataframe,
+    preprocess_dataframe, train_model, generate_synthetic,
+    evaluate_hellinger_by_column, plot_hellinger_bar, compare_histograms,
+)
+
+# 1) Load your dataset
+# df = load_dataframe("IAFREE_Chile.xlsx")
+df = load_dataframe("path/to/dataset.xlsx")
+
+# 2) Optional: subset columns by prefix (e.g., only EEE*)
+df = df[[c for c in df.columns if c.startswith("EEE")]]
+
+# 3) Optional preprocessing similar to the notebook
+numeric_cols = ["EEE5", "EEE6", "EEE7", "EEE8", "EEE9", "EEE10", "EEE11", "Raça"]
+df_prep = preprocess_dataframe(df, dropna=False, numeric_columns=numeric_cols, fill_value=-1)
+
+# 4) Train a model and generate synthetic data
+model = train_model(df_prep, model="CTGAN", epochs=600)
+synth = generate_synthetic(model, num_rows=1000)
+
+# 5) Evaluate similarity (Hellinger)
+hell = evaluate_hellinger_by_column(df_prep, synth)
+print("Hellinger mean:", float(hell["Hellinger"].mean()))
+print(hell.head())
+
+# 6) (Optional) Plot
+plot_hellinger_bar(hell)
+compare_histograms(df_prep, synth, columns=df_prep.columns[:6])
+
+# 7) Save synthetic data
+save_dataframe(synth, "synthetic_output.csv")
+```
+
+## Command Line Usage
+A convenience script is provided at `scripts/generate_synthetic.py`.
+
+Examples:
+
+- Generate 1000 CTGAN samples from an Excel file and save as CSV:
+```
+python scripts/generate_synthetic.py IAFREE_Chile.xlsx synthetic_ctgan.csv --model CTGAN --epochs 600 --samples 1000 --eval
+```
+
+- Use only columns that start with `EEE`, coerce specific columns to numeric, and drop NA rows:
+```
+python scripts/generate_synthetic.py IAFREE_Chile.xlsx synthetic_eee.csv --subset-prefix EEE --numeric-columns EEE5 EEE6 EEE7 EEE8 EEE9 EEE10 EEE11 Raça --dropna --model CTGAN --epochs 600 --samples 1000 --eval
+```
+
+- Use GaussianCopula without epochs parameter:
+```
+python scripts/generate_synthetic.py IAFREE_Chile.xlsx synthetic_gc.csv --model GaussianCopula --samples 500 --eval
+```
+
+## Function Paths (API)
+- sinteticos.io_utils.load_dataframe(path, sheet_name=None)
+- sinteticos.io_utils.save_dataframe(df, path, index=False)
+- sinteticos.generator.preprocess_dataframe(df, dropna=False, numeric_columns=None, fill_value=-1)
+- sinteticos.generator.train_model(df, model="CTGAN", **model_kwargs)
+- sinteticos.generator.generate_synthetic(model, num_rows=1000)
+- sinteticos.evaluation.hellinger_distance(p, q)
+- sinteticos.evaluation.evaluate_hellinger_by_column(df_real, df_synth)
+- sinteticos.plotting.plot_hellinger_bar(df_hellinger, title="...")
+- sinteticos.plotting.compare_histograms(df_real, df_synth, columns=None, n_cols=3, bins=None)
+
+These are also imported into the top-level namespace:
+- from sinteticos import load_dataframe, save_dataframe, preprocess_dataframe, train_model, generate_synthetic, evaluate_hellinger_by_column, plot_hellinger_bar, compare_histograms
+
+## Notes
+- This library is derived from the notebook `sintectic.ipynb`. It encapsulates the same workflow into reusable functions.
+- Depending on your dataset, you may need to adjust preprocessing (numeric columns and fill values) to get optimal model convergence.
+- For Excel support, ensure `openpyxl` is installed.
+
+## License
+MIT (or adapt as needed).
