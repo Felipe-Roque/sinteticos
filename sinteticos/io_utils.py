@@ -16,7 +16,9 @@ def load_dataframe(path: str, sheet_name: Optional[str] = None) -> pd.DataFrame:
     if ext in {".csv", ".txt"}:
         return pd.read_csv(path)
     if ext in {".xls", ".xlsx"}:
-        return pd.read_excel(path, sheet_name=sheet_name)
+        # If sheet_name is None, pandas returns a dict of DataFrames; default to first sheet (0)
+        sn = 0 if sheet_name is None else sheet_name
+        return pd.read_excel(path, sheet_name=sn)
     raise ValueError(f"Unsupported file extension: {ext}. Use CSV or Excel.")
 
 

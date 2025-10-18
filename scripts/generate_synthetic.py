@@ -2,9 +2,18 @@
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 from typing import List, Optional
 
 import pandas as pd
+
+# Ensure project root is on sys.path when running the script directly via path (python scripts/...) 
+# so that `import sinteticos` works without installing the package.
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, os.pardir))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from sinteticos.io_utils import load_dataframe, save_dataframe
 from sinteticos.generator import preprocess_dataframe, train_model, generate_synthetic
@@ -18,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--model", default="CTGAN", choices=["CTGAN", "GaussianCopula", "CopulaGAN"], help="Model type")
     p.add_argument("--epochs", type=int, default=300, help="Training epochs for GAN models")
     p.add_argument("--samples", type=int, default=1000, help="Number of synthetic rows to generate")
-    p.add_argument("--sheet", default=None, help="Excel sheet name (if input is Excel)")
+    p.add_argument("--sheet", default=None, help="Excel sheet name or index (default: first sheet)")
     p.add_argument("--dropna", action="store_true", help="Drop rows with any NA before training")
     p.add_argument("--numeric-columns", nargs='*', default=None, help="Columns to coerce to numeric (fill NaN with -1 and cast to int)")
     p.add_argument("--subset-prefix", default=None, help="Only use columns starting with this prefix (e.g., EEE or ETI)")

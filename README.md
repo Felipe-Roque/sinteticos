@@ -2,6 +2,8 @@
 
 A small Python toolkit to generate synthetic tabular data from a sample dataset, inspired by the provided Jupyter notebook. It wraps SDV models (CTGAN, GaussianCopula, CopulaGAN) into a simple library API and a command-line interface.
 
+Data location: place your datasets under the `data/` directory. This repo includes `data/IAFREE_Chile.xlsx` as an example input.
+
 ## Features
 - Load CSV/Excel datasets
 - Optional preprocessing (drop NA, coerce selected columns to numeric)
@@ -14,11 +16,19 @@ A small Python toolkit to generate synthetic tabular data from a sample dataset,
 ## Installation
 Install dependencies (Python 3.9+ recommended):
 
+Option A (recommended):
+```
+pip install -r requirements.txt
+```
+
+Option B (manual):
 ```
 pip install pandas numpy matplotlib seaborn sdv openpyxl
 ```
 
-Note: `sdv` may require additional system packages depending on your environment.
+Notes:
+- `sdv` provides the tabular models (CTGAN, GaussianCopula, CopulaGAN) used by this project.
+- Depending on your OS, `sdv` may require additional system packages or wheels (and may install optional extras like PyTorch). If you encounter build issues, please consult the SDV installation docs.
 
 ## Quick Start (Python)
 ```
@@ -29,8 +39,10 @@ from sinteticos import (
 )
 
 # 1) Load your dataset
-# df = load_dataframe("IAFREE_Chile.xlsx")
-df = load_dataframe("path/to/dataset.xlsx")
+# Use the bundled example dataset
+df = load_dataframe("data/IAFREE_Chile.xlsx")
+# or your own file under data/
+# df = load_dataframe("data/your_dataset.xlsx")
 
 # 2) Optional: subset columns by prefix (e.g., only EEE*)
 df = df[[c for c in df.columns if c.startswith("EEE")]]
@@ -53,7 +65,7 @@ plot_hellinger_bar(hell)
 compare_histograms(df_prep, synth, columns=df_prep.columns[:6])
 
 # 7) Save synthetic data
-save_dataframe(synth, "synthetic_output.csv")
+save_dataframe(synth, "data/synthetic_output.csv")
 ```
 
 ## Command Line Usage
@@ -63,18 +75,32 @@ Examples:
 
 - Generate 1000 CTGAN samples from an Excel file and save as CSV:
 ```
-python scripts/generate_synthetic.py IAFREE_Chile.xlsx synthetic_ctgan.csv --model CTGAN --epochs 600 --samples 1000 --eval
+python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_ctgan.csv --model CTGAN --epochs 600 --samples 1000 --eval
 ```
 
 - Use only columns that start with `EEE`, coerce specific columns to numeric, and drop NA rows:
 ```
-python scripts/generate_synthetic.py IAFREE_Chile.xlsx synthetic_eee.csv --subset-prefix EEE --numeric-columns EEE5 EEE6 EEE7 EEE8 EEE9 EEE10 EEE11 Raça --dropna --model CTGAN --epochs 600 --samples 1000 --eval
+python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_eee.csv --subset-prefix EEE --numeric-columns EEE5 EEE6 EEE7 EEE8 EEE9 EEE10 EEE11 Raça --dropna --model CTGAN --epochs 600 --samples 1000 --eval
 ```
 
 - Use GaussianCopula without epochs parameter:
 ```
-python scripts/generate_synthetic.py IAFREE_Chile.xlsx synthetic_gc.csv --model GaussianCopula --samples 500 --eval
+python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_gc.csv --model GaussianCopula --samples 500 --eval
 ```
+
+## Project Structure
+- data/
+  - IAFREE_Chile.xlsx
+- scripts/
+  - generate_synthetic.py
+- sinteticos/
+  - __init__.py
+  - io_utils.py
+  - generator.py
+  - evaluation.py
+  - plotting.py
+- sintectic.ipynb
+- README.md
 
 ## Function Paths (API)
 - sinteticos.io_utils.load_dataframe(path, sheet_name=None)
