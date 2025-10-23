@@ -88,6 +88,17 @@ python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_eee.c
 python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_gc.csv --model GaussianCopula --samples 500 --eval
 ```
 
+### Hellinger Report: GaussianCopula vs CTGAN
+A separate script generates a per-column Hellinger report comparing GaussianCopula and CTGAN:
+```
+python scripts/generate_report.py data/IAFREE_Chile.xlsx data/hellinger_report.csv --samples 1000 --epochs 600 --eval
+```
+The output CSV (by default saved at `data/hellinger_report.csv`) contains columns:
+- H_GaussianCopula: Hellinger distance between real data and GaussianCopula synthetic
+- H_CTGAN: Hellinger distance between real data and CTGAN synthetic
+- H_BetweenSynths: Hellinger distance between the two synthetic outputs
+A summary row `__MEAN__` gives the mean across columns.
+
 ## Project Structure
 - data/
   - IAFREE_Chile.xlsx
