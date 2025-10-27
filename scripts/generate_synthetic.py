@@ -32,6 +32,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--numeric-columns", nargs='*', default=None, help="Columns to coerce to numeric (fill NaN with -1 and cast to int)")
     p.add_argument("--subset-prefix", default=None, help="Only use columns starting with this prefix (e.g., EEE or ETI)")
     p.add_argument("--eval", action="store_true", help="Compute and print Hellinger distance per column")
+    p.add_argument("--trials", type=int, default=1, help="Number of trials to run; the best (lowest mean Hellinger) synthetic will be saved")
     return p.parse_args()
 
 
@@ -57,13 +58,29 @@ def main():
     if args.model.lower() in {"ctgan", "copulagan"}:
         model_kwargs["epochs"] = int(args.epochs)
 
-    model = train_model(df_prep, model=args.model, **model_kwargs)
-    synth = generate_synthetic(model, num_rows=args.samples)
+    best_synth = None
+    best_score = None
+    best_trial = None
 
-    save_dataframe(synth, args.output, index=False)
+    trials = max(1, int(args.trials))
+    for t in range(1, trials + 1):
+        model = train_model(df_prep, model=args.model, **model_kwargs)
+        synth = generate_synthetic(model, num_rows=args.samples)
+        # Evaluate mean Hellinger per column
+        hell = evaluate_hellinger_by_column(df_prep, synth)
+        score = float(hell["Hellinger"].mean())
+        print(f"Trial {t}/{trials} - mean Hellinger: {score:.6f}")
+        if best_score is None or score < best_score:
+            best_score = score
+            best_synth = synth
+            best_trial = t
+
+    # Save only the best synthetic dataset
+    save_dataframe(best_synth, args.output, index=False)
+    print(f"Saved best synthetic from trial {best_trial} with mean Hellinger={best_score:.6f} -> {args.output}")
 
     if args.eval:
-        hell = evaluate_hellinger_by_column(df_prep, synth)
+        hell = evaluate_hellinger_by_column(df_prep, best_synth)
         print("Hellinger mean:", float(hell["Hellinger"].mean()))
         print(hell)
 

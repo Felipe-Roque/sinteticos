@@ -84,6 +84,22 @@ def main():
     }, index=["__MEAN__"])
     report_out = pd.concat([report, mean_row], axis=0)
 
+    # Add distribution quality categories for each Hellinger column
+    def _classify(h: float) -> str:
+        if pd.isna(h):
+            return "NA"
+        if 0 <= h < 0.10:
+            return "OD"  # Optimal distribution
+        if 0.10 <= h < 0.25:
+            return "GD"  # Good distribution
+        if 0.25 <= h < 0.40:
+            return "AD"  # Acceptable with restrictions
+        return "UD"      # Unacceptable distribution
+
+    report_out["C_GaussianCopula"] = report_out["H_GaussianCopula"].apply(_classify)
+    report_out["C_CTGAN"] = report_out["H_CTGAN"].apply(_classify)
+    report_out["C_BetweenSynths"] = report_out["H_BetweenSynths"].apply(_classify)
+
     # Save CSV
     out_path = args.output_csv
     os.makedirs(os.path.dirname(out_path), exist_ok=True)

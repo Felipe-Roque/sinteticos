@@ -11,7 +11,7 @@ Data location: place your datasets under the `data/` directory. This repo includ
 - Generate synthetic samples
 - Evaluate distribution similarity using Hellinger distance per column
 - Optional plots: Hellinger bar chart and histogram comparisons
-- CLI script for end-to-end generation
+- CLI script for end-to-end generation (supports multiple trials and selects the best)
 
 ## Installation
 Install dependencies (Python 3.9+ recommended):
@@ -81,6 +81,11 @@ python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_ctgan
 - Use only columns that start with `EEE`, coerce specific columns to numeric, and drop NA rows:
 ```
 python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_eee.csv --subset-prefix EEE --numeric-columns EEE5 EEE6 EEE7 EEE8 EEE9 EEE10 EEE11 Raça --dropna --model CTGAN --epochs 600 --samples 1000 --eval
+```
+
+- Run multiple trials and keep only the best (lowest mean Hellinger) synthetic output:
+```
+python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_best.csv --model CTGAN --epochs 600 --samples 1000 --trials 5 --eval
 ```
 
 - Use GaussianCopula without epochs parameter:
