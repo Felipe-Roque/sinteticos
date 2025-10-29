@@ -10,7 +10,8 @@ Data location: place your datasets under the `data/` directory. This repo includ
 - Train SDV models: CTGAN, GaussianCopula, CopulaGAN
 - Generate synthetic samples
 - Evaluate distribution similarity using Hellinger distance per column
-- Optional plots: Hellinger bar chart and histogram comparisons
+- Compute correlation matrices (Spearman and Kendall) for output data
+- Optional plots: Hellinger bar chart, histogram comparisons, and correlation heatmaps
 - CLI script for end-to-end generation (supports multiple trials and selects the best)
 
 ## Installation
@@ -93,6 +94,50 @@ python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_best.
 python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_gc.csv --model GaussianCopula --samples 500 --eval
 ```
 
+## Correlation Matrices (Spearman and Kendall)
+You can compute and visualize correlation matrices for the generated synthetic data from the CLI, and also save the heatmaps to files.
+
+Display only (two windows will open, one per method):
+```
+python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_corr.csv \
+  --model CTGAN --epochs 600 --samples 1000 \
+  --corr --corr-annot --corr-mask-upper
+```
+
+Display and save PNGs to a directory (created if missing):
+```
+python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_corr.csv \
+  --model CTGAN --epochs 600 --samples 1000 \
+  --corr --corr-annot --corr-mask-upper \
+  --corr-save data/corr_plots
+```
+This writes the following files:
+- data/corr_plots/spearman_correlation.png
+- data/corr_plots/kendall_correlation.png
+
+Flags explained:
+- --corr: enables correlation computation and plotting for the best synthetic output from the run.
+- --corr-annot: annotates each heatmap cell with the correlation value.
+- --corr-mask-upper: hides the upper triangle to reduce visual clutter.
+- --corr-save DIR: saves the heatmaps under DIR. If omitted, plots are only displayed.
+
+Tips:
+- Correlations are computed on numeric columns. If your variables are coded as strings, use preprocessing to coerce them to numeric (see --numeric-columns in the examples above).
+- On headless servers (no GUI), figures may not display, but they will be saved when you pass --corr-save.
+
+Python API example:
+```
+from sinteticos import spearman_correlation, kendall_correlation, plot_correlation_matrix
+
+# df is your DataFrame (real or synthetic)
+spear = spearman_correlation(df)
+kend = kendall_correlation(df)
+
+# Heatmaps
+plot_correlation_matrix(df, method="spearman", annot=True, mask_upper=True, save_path="data/spearman_corr.png")
+plot_correlation_matrix(df, method="kendall", save_path="data/kendall_corr.png")
+```
+
 ### Hellinger Report: GaussianCopula vs CTGAN
 A separate script generates a per-column Hellinger report comparing GaussianCopula and CTGAN:
 ```
@@ -126,11 +171,15 @@ A summary row `__MEAN__` gives the mean across columns.
 - sinteticos.generator.generate_synthetic(model, num_rows=1000)
 - sinteticos.evaluation.hellinger_distance(p, q)
 - sinteticos.evaluation.evaluate_hellinger_by_column(df_real, df_synth)
+- sinteticos.evaluation.compute_correlation(df, method)
+- sinteticos.evaluation.spearman_correlation(df)
+- sinteticos.evaluation.kendall_correlation(df)
 - sinteticos.plotting.plot_hellinger_bar(df_hellinger, title="...")
 - sinteticos.plotting.compare_histograms(df_real, df_synth, columns=None, n_cols=3, bins=None)
+- sinteticos.plotting.plot_correlation_matrix(df, method="spearman", annot=False, mask_upper=False, save_path=None)
 
 These are also imported into the top-level namespace:
-- from sinteticos import load_dataframe, save_dataframe, preprocess_dataframe, train_model, generate_synthetic, evaluate_hellinger_by_column, plot_hellinger_bar, compare_histograms
+- from sinteticos import load_dataframe, save_dataframe, preprocess_dataframe, train_model, generate_synthetic, evaluate_hellinger_by_column, compute_correlation, spearman_correlation, kendall_correlation, plot_hellinger_bar, compare_histograms, plot_correlation_matrix
 
 ## Notes
 - This library is derived from the notebook `sintectic.ipynb`. It encapsulates the same workflow into reusable functions.

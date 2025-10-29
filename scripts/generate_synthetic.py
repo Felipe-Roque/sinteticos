@@ -18,6 +18,7 @@ if PROJECT_ROOT not in sys.path:
 from sinteticos.io_utils import load_dataframe, save_dataframe
 from sinteticos.generator import preprocess_dataframe, train_model, generate_synthetic
 from sinteticos.evaluation import evaluate_hellinger_by_column
+from sinteticos.plotting import plot_correlation_matrix
 
 
 def parse_args() -> argparse.Namespace:
@@ -33,6 +34,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--subset-prefix", default=None, help="Only use columns starting with this prefix (e.g., EEE or ETI)")
     p.add_argument("--eval", action="store_true", help="Compute and print Hellinger distance per column")
     p.add_argument("--trials", type=int, default=1, help="Number of trials to run; the best (lowest mean Hellinger) synthetic will be saved")
+
+    # Correlation options for output synthetic data
+    p.add_argument("--corr", action="store_true", help="Compute and plot correlation matrices (Spearman and Kendall) for the synthetic output")
+    p.add_argument("--corr-annot", action="store_true", help="Annotate correlation heatmaps with values")
+    p.add_argument("--corr-mask-upper", action="store_true", help="Mask upper triangle in correlation heatmaps")
+    p.add_argument("--corr-save", default=None, help="If provided, save correlation heatmaps to this directory (files named <method>_correlation.png)")
     return p.parse_args()
 
 
@@ -83,6 +90,24 @@ def main():
         hell = evaluate_hellinger_by_column(df_prep, best_synth)
         print("Hellinger mean:", float(hell["Hellinger"].mean()))
         print(hell)
+
+    if args.corr:
+        # Prepare save paths if directory given
+        save_dir = args.corr_save
+        if save_dir:
+            os.makedirs(save_dir, exist_ok=True)
+        for method in ("spearman", "kendall"):
+            save_path = None
+            if save_dir:
+                save_path = os.path.join(save_dir, f"{method}_correlation.png")
+            print(f"Plotting {method.capitalize()} correlation matrix for synthetic output...")
+            plot_correlation_matrix(
+                best_synth,
+                method=method,
+                annot=args.corr_annot,
+                mask_upper=args.corr_mask_upper,
+                save_path=save_path,
+            )
 
 
 if __name__ == "__main__":

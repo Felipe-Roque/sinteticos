@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -34,3 +34,41 @@ def evaluate_hellinger_by_column(df_real: pd.DataFrame, df_synth: pd.DataFrame) 
         by="Hellinger", ascending=False
     )
     return out
+
+
+def compute_correlation(
+    df: pd.DataFrame,
+    method: str = "spearman",
+    numeric_only: bool = True,
+    min_periods: Optional[int] = 1,
+) -> pd.DataFrame:
+    """Compute a correlation matrix for a DataFrame using pandas.
+
+    Parameters:
+    - df: input DataFrame.
+    - method: one of {'spearman', 'kendall', 'pearson'}.
+    - numeric_only: if True, use only numeric columns (recommended).
+    - min_periods: Minimum number of observations required per pair of columns to have a valid result.
+
+    Returns:
+    - pandas DataFrame of correlations (symmetric matrix, index=columns=variable names).
+    """
+    method = method.lower()
+    if method not in {"spearman", "kendall", "pearson"}:
+        raise ValueError("method must be one of 'spearman', 'kendall', 'pearson'")
+
+    if numeric_only:
+        df = df.select_dtypes(include=["number"]).copy()
+    if df.empty:
+        return pd.DataFrame()
+    return df.corr(method=method, min_periods=min_periods, numeric_only=False)
+
+
+def spearman_correlation(df: pd.DataFrame, numeric_only: bool = True) -> pd.DataFrame:
+    """Convenience wrapper to compute Spearman rank correlation matrix."""
+    return compute_correlation(df, method="spearman", numeric_only=numeric_only)
+
+
+def kendall_correlation(df: pd.DataFrame, numeric_only: bool = True) -> pd.DataFrame:
+    """Convenience wrapper to compute Kendall tau correlation matrix."""
+    return compute_correlation(df, method="kendall", numeric_only=numeric_only)
