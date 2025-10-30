@@ -13,6 +13,7 @@ Data location: place your datasets under the `data/` directory. This repo includ
 - Compute correlation matrices (Spearman and Kendall) for output data
 - Optional plots: Hellinger bar chart, histogram comparisons, and correlation heatmaps
 - CLI script for end-to-end generation (supports multiple trials and selects the best)
+- Run single- or multi-factor Confirmatory Factor Analysis (CFA) in Python (semopy) with key fit indices (χ2, df, p, χ2/df, CFI, TLI, SRMR, RMSEA) and reliability (Cronbach’s alpha, McDonald’s omega); multi-factor via --model-spec.
 
 ## Installation
 Install dependencies (Python 3.9+ recommended):
@@ -24,7 +25,7 @@ pip install -r requirements.txt
 
 Option B (manual):
 ```
-pip install pandas numpy matplotlib seaborn sdv openpyxl
+pip install pandas numpy matplotlib seaborn sdv openpyxl semopy
 ```
 
 Notes:
@@ -94,6 +95,22 @@ python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_best.
 python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_gc.csv --model GaussianCopula --samples 500 --eval
 ```
 
+### Selecting specific columns (dimensions)
+If you want to run the pipeline on a specific set of items (e.g., the dmin1 dimension using items qa5, qa6, qa10), pass the --columns flag to either script:
+
+- Generate synthetic data using only qa5, qa6, qa10:
+```
+python scripts/generate_synthetic.py data/IAFREE_Chile.xlsx data/synthetic_dmin1.csv --columns qa5,qa6,qa10 --model GaussianCopula --samples 1000 --eval
+```
+
+- Build a Hellinger report using only qa5, qa6, qa10:
+```
+python scripts/generate_report.py data/IAFREE_Chile.xlsx data/hellinger_dmin1.csv --columns qa5,qa6,qa10 --samples 1000 --epochs 600 --eval
+```
+
+Notes:
+- --columns accepts a comma-separated list. Columns must exist in your dataset (exact names).
+
 ## Correlation Matrices (Spearman and Kendall)
 You can compute and visualize correlation matrices for the generated synthetic data from the CLI, and also save the heatmaps to files.
 
@@ -148,6 +165,80 @@ The output CSV (by default saved at `data/hellinger_report.csv`) contains column
 - H_CTGAN: Hellinger distance between real data and CTGAN synthetic
 - H_BetweenSynths: Hellinger distance between the two synthetic outputs
 A summary row `__MEAN__` gives the mean across columns.
+
+## Confirmatory Factor Analysis (CFA) in Python (semopy)
+You can evaluate the psychometric adequacy of a dimension (e.g., dmin1) directly in Python using semopy. This runs a single-factor CFA and reports the standard fit indices and reliability metrics.
+
+CLI example (using items qa5, qa6, qa10 for factor dmin1):
+```
+python scripts/run_cfa.py data/IAFREE_Chile.xlsx \
+  --columns qa5,qa6,qa10 \
+  --factor-name dmin1 \
+  --estimator DWLS \
+  --output data/cfa_dmin1.csv
+```
+Notes:
+- Estimator options: ML, WLS, DWLS. For ordinal items (Likert), DWLS is often recommended when available.
+- Results are printed to the console and saved to the CSV specified by --output with columns:
+  chisq, df, pvalue, chisq_df, cfi, tli, srmr, rmsea, alpha, omega
+
+Python API example:
+```
+import pandas as pd
+from sinteticos import load_dataframe
+from sinteticos.cfa import run_cfa_python
+
+df = load_dataframe("data/IAFREE_Chile.xlsx")
+res = run_cfa_python(df, items=["qa5","qa6","qa10"], factor_name="dmin1", estimator="DWLS", save_path="data/cfa_dmin1.csv")
+print(res)
+```
+Interpretation guidelines (per Brown, 2015; Hayes & Coutts, 2020):
+- Good fit: p>0.05 (chi-square), χ2/df ≤ 5, CFI/TLI ≥ 0.95, SRMR/RMSEA ≤ 0.08
+- Reliability acceptable from α, ω ≥ 0.60
+
+### Multi-factor CFA (multiple dimensions)
+You can fit multiple latent dimensions in one model. Provide a model specification string that defines each factor and its items using the syntax:
+
+- One definition per factor in the form: name = item1 + item2 + item3
+- Separate factor definitions with semicolons (;) or newlines
+- Each factor must have at least 2 items
+
+Examples of model specs:
+- "dim2=qa1+qa2+qa24; dim3=qe4+qe6+qe9"
+- "F1 = x1 + x2 + x3; F2 = y1 + y2 + y3 + y4"
+
+CLI example:
+```
+python scripts/run_cfa.py data/IAFREE_Chile.xlsx \
+  --sheet 0 \
+  --model-spec "dim2=qa1+qa2+qa24; dim3=qe4+qe6+qe9" \
+  --estimator DWLS \
+  --output data/cfa_multi.csv
+```
+
+Python API examples:
+- Using the top-level API:
+```
+from sinteticos import load_dataframe, parse_model_spec, run_cfa_python_multi
+
+df = load_dataframe("data/IAFREE_Chile.xlsx")
+factors = parse_model_spec("dim2=qa1+qa2+qa24; dim3=qe4+qe6+qe9")
+res = run_cfa_python_multi(df, factors=factors, estimator="DWLS", save_path="data/cfa_multi.csv")
+print(res)
+```
+- Or importing from the cfa module:
+```
+from sinteticos.cfa import parse_model_spec, run_cfa_python_multi
+```
+
+Outputs:
+- Global fit indices: chisq, df, pvalue, chisq_df, cfi, tli, srmr, rmsea
+- Per-factor reliability fields: alpha_<factor>, omega_<factor>
+  - Note: omega_<factor> is currently a placeholder (NaN) in the multi-factor function; alpha_<factor> is Cronbach’s alpha computed from the factor’s items.
+
+Notes:
+- Items referenced in the model spec must exist as columns in your dataset (exact names).
+- Estimator options are the same as for single-factor: ML, WLS, DWLS.
 
 ## Project Structure
 - data/

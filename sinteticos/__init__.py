@@ -27,6 +27,7 @@ from .evaluation import (
     kendall_correlation,
 )
 from .plotting import plot_hellinger_bar, compare_histograms, plot_correlation_matrix
+from .cfa import run_cfa_python, run_cfa_python_multi, parse_model_spec, CFAError
 
 __all__ = [
     "load_dataframe",
@@ -42,4 +43,8 @@ __all__ = [
     "plot_hellinger_bar",
     "compare_histograms",
     "plot_correlation_matrix",
+    "run_cfa_python",
+    "run_cfa_python_multi",
+    "parse_model_spec",
+    "CFAError",
 ]

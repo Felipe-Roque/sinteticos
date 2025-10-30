@@ -32,6 +32,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--dropna", action="store_true", help="Drop rows with any NA before training")
     p.add_argument("--numeric-columns", nargs='*', default=None, help="Columns to coerce to numeric (fill NaN with -1 and cast to int)")
     p.add_argument("--subset-prefix", default=None, help="Only use columns starting with this prefix (e.g., EEE or ETI)")
+    p.add_argument("--columns", default=None, help="Comma-separated list of columns to keep (e.g., qa5,qa6,qa10)")
     p.add_argument("--eval", action="store_true", help="Print the full report to stdout (compatibility flag)")
     return p.parse_args()
 
@@ -54,6 +55,14 @@ def main():
         if not cols:
             raise SystemExit(f"No columns starting with prefix '{args.subset_prefix}' found.")
         df = df[cols]
+
+    # If explicit columns are provided, keep only those
+    if args.columns:
+        keep = [c.strip() for c in args.columns.split(",") if c.strip()]
+        missing = [c for c in keep if c not in df.columns]
+        if missing:
+            raise SystemExit(f"Columns not found in dataset: {missing}")
+        df = df[keep]
 
     df_prep = preprocess_dataframe(
         df,

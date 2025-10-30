@@ -9,3 +9,6 @@ openpyxl>=3.0
 sdv>=1.8
 # Fallback for GaussianCopula when SDV is unavailable
 copulas>=0.8
+
+# For CFA in Python
+semopy>=2.3
