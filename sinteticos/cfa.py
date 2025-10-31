@@ -69,7 +69,7 @@ def _omega_total_std(loadings: np.ndarray, theta: np.ndarray) -> float:
     theta: (p,) residual variances (unique variances) for standardized items
     Assumes factor variance = 1.
     """
-    print(loadings, theta)
+    # print(loadings, theta)
     if loadings.ndim != 1:
         loadings = loadings.ravel()
     if theta.ndim != 1:
@@ -141,7 +141,7 @@ def run_cfa_python(
         # Older semopy versions expect only the model
         stats = calc_stats(model)
 
-    print(stats)
+    # print(stats)
     # stats is a DataFrame with index containing 'chi2', 'DoF', 'p-value', 'CFI', 'TLI', 'SRMR', 'RMSEA'
     def _get_stat(name: str) -> Optional[float]:
         # Try several variants to be compatible with different semopy versions
@@ -180,7 +180,7 @@ def run_cfa_python(
     # Reliability metrics
     x = data.to_numpy(dtype=float)
     alpha = _cronbach_alpha(x)
-    print(model.parameters)
+    # print(model.parameters)
 
     # Extract standardized solution to compute omega
     try:
@@ -293,29 +293,103 @@ def run_cfa_python_multi(
 
     try:
         stats = calc_stats(model, data)
+        # print(stats)
     except TypeError:
         stats = calc_stats(model)
+        # print(stats)
+
 
     def _get_stat(name: str) -> Optional[float]:
-        for idx_name in (name, name.lower()):
-            try:
-                row = stats.loc[idx_name]
-            except Exception:
-                continue
-            for col in ("Value", "value", "Stat", "stat"):
+        # Robustly find a statistic named `name` in semopy's calc_stats output across versions
+        # Build candidate names (case-insensitive) and common aliases
+        aliases = {
+            "chi2": ["chi2", "chisq", "chi-square", "chi_sq", "x2", "chisquare"],
+            "DoF": ["dof", "df", "degrees of freedom"],
+            "p-value": ["p-value", "pvalue", "p", "pval"],
+            "CFI": ["cfi"],
+            "TLI": ["tli", "nnfi"],
+            "SRMR": ["srmr"],
+            "RMSEA": ["rmsea"],
+        }
+        candidates = [name]
+        for k, vals in aliases.items():
+            if name.lower() == k.lower():
+                candidates.extend(vals)
+        # Ensure lower/strip variants
+        cand_norm = {c.lower().strip() for c in candidates}
+
+        try:
+            import pandas as pd  # type: ignore
+        except Exception:
+            pass
+
+        # Helper to normalize labels
+        def _norm(s: str) -> str:
+            return str(s).lower().strip()
+
+        # Case 1: stats is a DataFrame-like with index names as stats
+        try:
+            idx_labels = [
+                _norm(i) for i in (list(stats.index) if hasattr(stats, "index") else [])
+            ]
+        except Exception:
+            idx_labels = []
+        # Try matching by index
+        for i, lab in enumerate(idx_labels):
+            if lab in cand_norm:
                 try:
-                    val = row[col]
-                    return float(val)
+                    row = stats.iloc[i]
+                    # Common value columns
+                    for col in ("Value", "value", "Stat", "stat"):
+                        if hasattr(row, "__contains__") and col in row.index:
+                            try:
+                                return float(row[col])
+                            except Exception:
+                                pass
+                    # Fallback: first numeric in the row
+                    seq = row.tolist() if hasattr(row, "tolist") else list(row)
+                    for v in seq:
+                        try:
+                            return float(v)
+                        except Exception:
+                            continue
                 except Exception:
                     continue
-            try:
-                for v in row.tolist() if hasattr(row, "tolist") else list(row):
+        # Case 2: stats organized with statistic names as columns
+        try:
+            col_labels = [
+                _norm(c) for c in (list(stats.columns) if hasattr(stats, "columns") else [])
+            ]
+        except Exception:
+            col_labels = []
+        for j, lab in enumerate(col_labels):
+            if lab in cand_norm:
+                try:
+                    # Prefer a row labeled 'Value' or 'Stat'
+                    for rname in ("Value", "value", "Stat", "stat"):
+                        try:
+                            return float(stats.loc[rname].iloc[j])
+                        except Exception:
+                            continue
+                    # Else, take the first row
                     try:
-                        return float(v)
+                        return float(stats.iloc[0, j])
                     except Exception:
-                        continue
-            except Exception:
-                pass
+                        pass
+                except Exception:
+                    continue
+        # Case 3: stats is a Series-like mapping
+        try:
+            if not hasattr(stats, "columns") and hasattr(stats, "index"):
+                # Try direct access by key
+                for key in getattr(stats, "index", []):
+                    if _norm(key) in cand_norm:
+                        try:
+                            return float(stats.loc[key])
+                        except Exception:
+                            continue
+        except Exception:
+            pass
         return None
 
     chisq = _get_stat("chi2")
