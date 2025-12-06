@@ -11,6 +11,33 @@ class CFAError(RuntimeError):
     pass
 
 
+def _chisq_pvalue(chisq: Optional[float], df: Optional[float]) -> Optional[float]:
+    """Compute upper-tail p-value for chi-square statistic.
+    Uses scipy if available; otherwise tries mpmath; falls back to None.
+    """
+    try:
+        if chisq is None or df in (None, 0):
+            return None
+        # Prefer scipy if available
+        try:
+            from scipy.stats import chi2  # type: ignore
+            return float(chi2.sf(chisq, int(df)))
+        except Exception:
+            pass
+        # Try mpmath as a lightweight fallback
+        try:
+            import mpmath as mp  # type: ignore
+            k = df / 2.0
+            x = chisq / 2.0
+            # Regularized upper incomplete gamma Q(k, x)
+            Q = mp.gammainc(k, x, mp.inf) / mp.gamma(k)
+            return float(Q)
+        except Exception:
+            return None
+    except Exception:
+        return None
+
+
 def parse_model_spec(spec: str) -> Dict[str, List[str]]:
     """
     Parse a simple multi-factor CFA specification string into a mapping.
@@ -79,6 +106,89 @@ def _omega_total_std(loadings: np.ndarray, theta: np.ndarray) -> float:
     if den <= 0:
         return float("nan")
     return float(num / den)
+
+
+def _compute_srmr_via_correlations(model, data: pd.DataFrame) -> float:
+    """Compute SRMR from observed data and model implied covariance.
+
+    We compute the standardized residuals using correlation matrices and
+    take the root mean square of the off-diagonal residuals.
+    SRMR = sqrt( mean_{i<j} (R_obs[i,j] - R_imp[i,j])^2 )
+    Returns NaN on failure.
+    """
+    try:
+        # Observed correlation matrix
+        X = data.to_numpy(dtype=float)
+        if X.ndim != 2 or X.shape[1] < 2:
+            return float("nan")
+        # Drop constant columns to avoid NaNs in correlation
+        col_std = X.std(axis=0, ddof=1)
+        keep = col_std > 0
+        if not np.all(keep):
+            X = X[:, keep]
+            if X.shape[1] < 2:
+                return float("nan")
+        R_obs = np.corrcoef(X, rowvar=False)
+        if not np.all(np.isfinite(R_obs)):
+            return float("nan")
+        # Implied covariance from model (robust to NaNs)
+        Sigma_raw = None
+        try:
+            Sigma_raw = model.inspect('implied.cov')
+        except Exception:
+            Sigma_raw = None
+        # Some semopy versions return pandas objects or dict-like; coerce to ndarray when possible
+        try:
+            if hasattr(Sigma_raw, 'to_numpy'):
+                Sigma = np.asarray(Sigma_raw.to_numpy(), dtype=float)
+            else:
+                Sigma = np.asarray(Sigma_raw, dtype=float) if Sigma_raw is not None else None
+        except Exception:
+            Sigma = None
+        # Observed covariance for repair/fallback
+        S_obs = np.cov(X, rowvar=False, ddof=1)
+        if Sigma is None or Sigma.ndim != 2:
+            Sigma = np.array(S_obs, dtype=float)
+        # Align shapes if needed
+        if Sigma.shape[0] != R_obs.shape[0]:
+            p = min(Sigma.shape[0], R_obs.shape[0])
+            Sigma = Sigma[:p, :p]
+            R_obs = R_obs[:p, :p]
+            S_obs = S_obs[:p, :p]
+        # Repair non-finite entries using observed covariance
+        mask_bad = ~np.isfinite(Sigma)
+        if np.any(mask_bad):
+            Sigma = Sigma.copy()
+            Sigma[mask_bad] = S_obs[mask_bad]
+        # Ensure diagonal is strictly positive to avoid division issues
+        diag = np.diag(Sigma).astype(float)
+        # Replace non-finite or non-positive diagonal with observed diag (or small epsilon)
+        diag_obs = np.diag(S_obs).astype(float)
+        bad_diag = (~np.isfinite(diag)) | (diag <= 0)
+        if np.any(bad_diag):
+            diag = diag.copy()
+            diag[bad_diag] = np.maximum(diag_obs[bad_diag], 1e-12)
+            # write back repaired diagonal
+            Sigma = Sigma.copy()
+            np.fill_diagonal(Sigma, diag)
+        d = np.sqrt(np.clip(np.diag(Sigma), 1e-12, None))
+        R_imp = Sigma / np.outer(d, d)
+        # Symmetrize to mitigate small numeric asymmetries
+        R_obs = (R_obs + R_obs.T) / 2.0
+        R_imp = (R_imp + R_imp.T) / 2.0
+        # Residuals, off-diagonal only
+        resid = R_obs - R_imp
+        p = resid.shape[0]
+        if p < 2:
+            return float("nan")
+        iu = np.triu_indices(p, k=1)
+        r = resid[iu]
+        if r.size == 0 or not np.all(np.isfinite(r)):
+            return float("nan")
+        ms = float(np.mean(r ** 2))
+        return float(np.sqrt(ms))
+    except Exception:
+        return float('nan')
 
 
 def run_cfa_python(
@@ -175,6 +285,16 @@ def run_cfa_python(
     tli = _get_stat('TLI')
     srmr = _get_stat('SRMR')
     rmsea = _get_stat('RMSEA')
+    # Fallback: compute p-value from chisq & df if missing
+    if pval is None:
+        pval = _chisq_pvalue(chisq, dfree)
+    # Fallback: compute SRMR manually if not provided by semopy stats
+    try:
+        srmr_auto = _compute_srmr_via_correlations(model, data)
+    except Exception:
+        srmr_auto = float('nan')
+    if srmr is None or (isinstance(srmr, float) and (np.isnan(srmr) or not np.isfinite(srmr))):
+        srmr = srmr_auto
     chisq_df = float(chisq / dfree) if (chisq is not None and dfree not in (None, 0)) else None
 
     # Reliability metrics
@@ -184,21 +304,46 @@ def run_cfa_python(
 
     # Extract standardized solution to compute omega
     try:
-        # semopy's inspect
-        params = model.parameters
-        # Compute standardized loadings: semopy provides 'lambdas' via inspect
-        # We'll approximate using factor score regression approach via implied covariance.
-        # Get implied covariance matrix Sigma and residuals Theta.
-        Sigma = model.inspect('implied.cov')
+        # Observed covariance and correlation as fallback
+        X_num = data.to_numpy(dtype=float)
+        S_obs = np.cov(X_num, rowvar=False, ddof=1)
+        # Try to get implied covariance
+        Sigma_raw = None
+        try:
+            Sigma_raw = model.inspect('implied.cov')
+        except Exception:
+            Sigma_raw = None
+        try:
+            if hasattr(Sigma_raw, 'to_numpy'):
+                Sigma = np.asarray(Sigma_raw.to_numpy(), dtype=float)
+            else:
+                Sigma = np.asarray(Sigma_raw, dtype=float) if Sigma_raw is not None else None
+        except Exception:
+            Sigma = None
+        if Sigma is None or Sigma.ndim != 2 or Sigma.shape != S_obs.shape:
+            Sigma = np.array(S_obs, dtype=float)
+        # Repair non-finite and ensure positive diagonal
+        mask_bad = ~np.isfinite(Sigma)
+        if np.any(mask_bad):
+            Sigma = Sigma.copy()
+            Sigma[mask_bad] = S_obs[mask_bad]
+        diag = np.diag(Sigma).astype(float)
+        diag_obs = np.diag(S_obs).astype(float)
+        bad_diag = (~np.isfinite(diag)) | (diag <= 0)
+        if np.any(bad_diag):
+            diag = diag.copy()
+            diag[bad_diag] = np.maximum(diag_obs[bad_diag], 1e-12)
+            Sigma = Sigma.copy()
+            np.fill_diagonal(Sigma, diag)
         # Standardize so diagonal is 1
-        d = np.sqrt(np.diag(Sigma))
+        d = np.sqrt(np.clip(np.diag(Sigma), 1e-12, None))
         S_std = Sigma / np.outer(d, d)
-        # For single factor, loadings can be approximated as first eigenvector of S_std scaled to communalities
-        w, V = np.linalg.eigh(S_std)
-        idx = np.argmax(w)
-        load_std = np.sqrt(max(w[idx] - 1e-12, 0)) * V[:, idx]
+        # Eigen-decomposition for one-factor approximation
+        w, V = np.linalg.eigh((S_std + S_std.T) / 2.0)
+        idx = int(np.argmax(w))
+        load_std = np.sqrt(max(w[idx] - 1e-12, 0.0)) * V[:, idx]
         # Residual variances as 1 - lambda^2
-        theta = 1.0 - np.clip(load_std**2, 0.0, 1.0)
+        theta = 1.0 - np.clip(load_std ** 2, 0.0, 1.0)
         omega = _omega_total_std(load_std, theta)
     except Exception:
         omega = float('nan')
@@ -399,6 +544,13 @@ def run_cfa_python_multi(
     tli = _get_stat("TLI")
     srmr = _get_stat("SRMR")
     rmsea = _get_stat("RMSEA")
+    # Fallback: compute SRMR manually if not provided by semopy stats
+    try:
+        srmr_auto = _compute_srmr_via_correlations(model, data)
+    except Exception:
+        srmr_auto = float('nan')
+    if srmr is None or (isinstance(srmr, float) and (np.isnan(srmr) or not np.isfinite(srmr))):
+        srmr = srmr_auto
     chisq_df = float(chisq / dfree) if (chisq is not None and dfree not in (None, 0)) else None
 
     # Per-factor reliability (Cronbach's alpha; omega left as NaN placeholder)

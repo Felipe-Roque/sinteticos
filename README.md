@@ -13,7 +13,7 @@ Data location: place your datasets under the `data/` directory. This repo includ
 - Compute correlation matrices (Spearman and Kendall) for output data
 - Optional plots: Hellinger bar chart, histogram comparisons, and correlation heatmaps
 - CLI script for end-to-end generation (supports multiple trials and selects the best)
-- Run single- or multi-factor Confirmatory Factor Analysis (CFA) in Python (semopy) with key fit indices (χ2, df, p, χ2/df, CFI, TLI, SRMR, RMSEA) and reliability (Cronbach’s alpha, McDonald’s omega); multi-factor via --model-spec.
+- Run single- or multi-factor Confirmatory Factor Analysis (CFA) in Python (semopy) with key fit indices (χ2, df, p, χ2/df, CFI, TLI, SRMR, RMSEA) and reliability (Cronbach’s alpha, McDonald’s omega); multi-factor via --model-spec. If semopy does not report p-values or SRMR directly, the toolkit now computes p-values from χ2 and df, and SRMR from observed vs. implied correlations.
 
 ## Installation
 Install dependencies (Python 3.9+ recommended):
@@ -273,7 +273,6 @@ These are also imported into the top-level namespace:
 - from sinteticos import load_dataframe, save_dataframe, preprocess_dataframe, train_model, generate_synthetic, evaluate_hellinger_by_column, compute_correlation, spearman_correlation, kendall_correlation, plot_hellinger_bar, compare_histograms, plot_correlation_matrix
 
 ## Notes
-- This library is derived from the notebook `sintectic.ipynb`. It encapsulates the same workflow into reusable functions.
 - Depending on your dataset, you may need to adjust preprocessing (numeric columns and fill values) to get optimal model convergence.
 - For Excel support, ensure `openpyxl` is installed.
 

@@ -7,15 +7,15 @@ import seaborn as sns
 import pandas as pd
 
 
-def plot_hellinger_bar(df_hellinger: pd.DataFrame, title: str = "Distância de Hellinger por variável") -> None:
+def plot_hellinger_bar(df_hellinger: pd.DataFrame, title: str = "Hellinger Distance") -> None:
     """Bar plot for Hellinger distances per column."""
     sns.set_style("darkgrid", {"grid.color": ".6", "grid.linestyle": ":"})
     plt.figure(figsize=(10, 8))
     # When df has index with names and column 'Hellinger'
     sns.barplot(x='Hellinger', y=df_hellinger.index, data=df_hellinger, palette='viridis')
     plt.title(title)
-    plt.xlabel("Distância de Hellinger")
-    plt.ylabel("Variável")
+    plt.xlabel("Hellinger Distance")
+    plt.ylabel("Variable")
     plt.tight_layout()
     plt.show()
 
