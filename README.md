@@ -1,4 +1,4 @@
-# Sinteticos
+# PySintetic
 
 A small Python toolkit to generate synthetic tabular data from a sample dataset, inspired by the provided Jupyter notebook. It wraps SDV models (CTGAN, GaussianCopula, CopulaGAN) into a simple library API and a command-line interface.
 
