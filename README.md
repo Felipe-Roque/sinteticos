@@ -277,4 +277,4 @@ These are also imported into the top-level namespace:
 - For Excel support, ensure `openpyxl` is installed.
 
 ## License
-MIT (or adapt as needed).
+This project is licensed under the MIT License. See the LICENSE file for details.
